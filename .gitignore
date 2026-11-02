@@ -1,0 +1,25 @@
+# Unity
+/Library/
+/Temp/
+/Obj/
+/Build/
+/Builds/
+/Logs/
+/UserSettings/
+/MemoryCaptures/
+*.csproj
+*.sln
+*.slnx
+*.user
+*.pidb
+*.booproj
+*.suo
+*.tmp
+*.pdb
+*.mdb
+.vscode/
+.claude/
+# Web tests
+WebVersion/test.html
+WebVersion/tests/*.png
+node_modules/
