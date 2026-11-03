@@ -106,6 +106,16 @@ public class Inventory : MonoBehaviour
         slots[slot] = item;
     }
 
+    // Клиент сети: предметы приходят от хоста. true — что-то поменялось
+    public bool NetSetSlot(int slot, ItemDef def, float cd, int charges)
+    {
+        var cur = slots[slot];
+        if (def == null) { if (cur == null) return false; slots[slot] = null; return true; }
+        if (cur == null || cur.def != def) { slots[slot] = new ItemInstance(def) { cooldownLeft = cd, charges = charges }; return true; }
+        cur.cooldownLeft = cd; cur.charges = charges;
+        return false;
+    }
+
     void Changed() => OnChanged?.Invoke();
 
     public int FreeSlot()
@@ -141,6 +151,7 @@ public class Inventory : MonoBehaviour
     public void Swap(int a, int b)
     {
         if (a == b || a < 0 || b < 0 || a >= TotalSlots || b >= TotalSlots) return;
+        if (Net.IsClient) { NetCmd.Swap(a, b); (slots[a], slots[b]) = (slots[b], slots[a]); Changed(); return; }
         (slots[a], slots[b]) = (slots[b], slots[a]);
         Changed();
     }
@@ -244,6 +255,7 @@ public class Inventory : MonoBehaviour
     {
         int price = SellPrice(slot);
         if (price <= 0 && Get(slot) == null) return;
+        if (Net.IsClient) { NetCmd.Sell(slot); return; }
         wallet.AddGold(price);
         Remove(slot);
     }

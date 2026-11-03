@@ -191,7 +191,7 @@ public class AbilityCaster : MonoBehaviour
         switch (a.Target)
         {
             case AbilityTarget.NoTarget:
-                DoCast(i, self);
+                if (Net.IsClient) NetCmd.Cast(i, self); else DoCast(i, self);
                 break;
             case AbilityTarget.AllyUnit when TargetingIndex == i:
                 TargetingIndex = -1;          // двойное нажатие — на себя
@@ -227,8 +227,25 @@ public class AbilityCaster : MonoBehaviour
         Say("Неверная цель");
     }
 
+    // Хост: приказ способности от игрока по сети
+    public void NetCast(int i, Unit target, Vector3 point, bool isPoint)
+    {
+        if (Abilities == null || i < 0 || i >= Abilities.Length || !self.IsAlive) return;
+        var gm = GameManager.Instance;
+        if (gm != null && (gm.IsGameOver || gm.IsPaused)) return;
+        var hc = GetComponent<HeroController>();
+        if (hc != null && hc.IsBusyChanneling) return;
+        if (status != null && status.IsStunned) return;
+        var a = Abilities[i];
+        if (!a.IsLearned || a.IsPassive || a.CooldownLeft > 0f || (mana != null && mana.Current < a.ManaCost)) return;
+        if (a.Target == AbilityTarget.NoTarget) DoCast(i, self);
+        else if (isPoint) { if (a.Target == AbilityTarget.Point) BeginCastPoint(i, point); }
+        else if (target != null && a.IsValidTarget(self, target)) BeginCast(i, target);
+    }
+
     void BeginCast(int i, Unit target)
     {
+        if (Net.IsClient) { NetCmd.Cast(i, target); return; }
         if (target.DistanceFrom(transform.position) <= Abilities[i].CastRange)
         {
             DoCast(i, target);
@@ -244,6 +261,7 @@ public class AbilityCaster : MonoBehaviour
 
     void BeginCastPoint(int i, Vector3 point)
     {
+        if (Net.IsClient) { NetCmd.CastPoint(i, point); return; }
         if (Flat(point, transform.position) <= Abilities[i].CastRange) { DoCastPoint(i, point); return; }
         pendingIndex = i;
         pendingTarget = null;

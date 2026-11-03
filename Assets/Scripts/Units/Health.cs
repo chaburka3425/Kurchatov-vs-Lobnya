@@ -58,9 +58,12 @@ public class Health : MonoBehaviour
 
     Unit selfUnit;
 
+    // Клиент сети: здоровье приходит от хоста
+    public void NetSet(float cur, float max, bool dead) { Current = cur; maxHealth = max; IsDead = dead; }
+
     public void TakeDamage(DamageInfo info)
     {
-        if (IsDead || invulnerable) return;
+        if (IsDead || invulnerable || Net.IsClient) return;
         if (selfUnit == null) selfUnit = GetComponent<Unit>();
         if (Glyph.Protects(selfUnit)) return;   // глиф: строения и крипы не получают урон
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.InputSystem;
@@ -27,7 +28,10 @@ public class MatchSetup : MonoBehaviour
     public static float MatchTime => InLobby || matchStartTime < 0f ? 0f : Time.time - matchStartTime;
 
     // Бот в лобби: ник, команда, выбранный герой, когда выберет, линия (0 верх, 1 мид, 2 низ, 3 лес)
-    class Slot { public string nick; public Team team; public HeroDefinition def; public float pickAt; public int lane; public GameObject go; }
+    // По сети: human — живой игрок (client — его номер), entity — номер его героя
+    class Slot { public string nick; public Team team; public HeroDefinition def; public float pickAt; public int lane; public GameObject go; public bool human; public ulong client = NetEntity.NoOwner; public int entity; }
+    public static MatchSetup Instance { get; private set; }
+    float waitPlayersUntil, lobbySendAt;
     readonly List<Slot> slots = new List<Slot>();
     static readonly string[][] Nicks = { new[] { "Петя", "Вова", "Димон", "Лёха", "Серый" }, new[] { "Артём", "Кирилл", "Макс", "Тимур", "Егор" } };
     static readonly int[] LanePool = { 0, 1, 2, 3, 2 };
@@ -73,21 +77,27 @@ public class MatchSetup : MonoBehaviour
 
     void Start()
     {
+        Instance = this;
         Glyph.ResetAll();
         matchStartTime = -1f;
         PlayerTeam = randomTeam ? (Random.value < 0.5f ? Team.Kurchatov : Team.Lobnya) : Team.Kurchatov;
+        if (Net.Online && Net.Me != null) PlayerTeam = Net.Me.team;
         foreach (var t in heroTemplates) if (t != null) t.SetActive(false);
 
-        // 4 союзных бота и 5 вражеских
+        // 4 союзных бота и 5 вражеских (по сети — живые игроки, остальные места — боты)
         Bots.Clear();
         for (int i = 0; i < 3; i++) TeamKills[i] = 0;
-        foreach (var team in new[] { PlayerTeam, BotTeam })
-        {
-            var names = new List<string>(Nicks[(int)team]);
-            Shuffle(names);
-            int count = team == PlayerTeam ? 4 : 5;
-            for (int i = 0; i < count; i++) slots.Add(new Slot { nick = names[i], team = team });
-        }
+        if (Net.IsHost)
+            foreach (var p in Net.Players)
+                if (p.id != Net.MyId) slots.Add(new Slot { nick = p.nick, team = p.team, human = true, client = p.id, lane = 1 });
+        if (!Net.IsClient)
+            foreach (var team in new[] { PlayerTeam, BotTeam })
+            {
+                var names = new List<string>(Nicks[(int)team]);
+                Shuffle(names);
+                int count = (team == PlayerTeam ? 4 : 5) - slots.FindAll(sl => sl.team == team).Count;
+                for (int i = 0; i < count; i++) slots.Add(new Slot { nick = names[i], team = team });
+            }
         var enemyLanes = new List<int>(LanePool); Shuffle(enemyLanes);
         int ei = 0;
         foreach (var sl in slots) if (sl.team == BotTeam) sl.lane = enemyLanes[ei++];
@@ -98,6 +108,22 @@ public class MatchSetup : MonoBehaviour
         InLobby = true;
         Time.timeScale = 0f;
         SetPhase(Phase.Pick);
+
+        if (Net.Online)
+        {
+            gameObject.AddComponent<NetWorld>();
+            waitPlayersUntil = Time.unscaledTime + 25f;   // ждём, пока все загрузят карту
+            if (Net.IsClient)
+            {
+                Net.On(Msg.LobbyState, (f, r) => OnLobbyState(r));
+                Net.On(Msg.Feed, (f, r) => OnNetFeed(r));
+            }
+            else
+            {
+                Net.On(Msg.Pick, (from, r) => { var sl = slots.Find(x => x.client == from); var d = HeroCatalog.Get(r.ReadString()); if (sl != null && sl.def == null && phase == Phase.Pick) sl.def = d; });
+                Net.On(Msg.Lane, (from, r) => { var sl = slots.Find(x => x.client == from); int l = r.ReadByte(); if (sl != null && l < 4) sl.lane = l; });
+            }
+        }
     }
 
     void OnDestroy()
@@ -106,6 +132,141 @@ public class MatchSetup : MonoBehaviour
         phase = Phase.Done;
         Health.AnyDeath -= OnAnyDeath;
         Health.AnyDamaged -= OnAnyDamaged;
+        if (Instance == this) Instance = null;
+        foreach (var t in new[] { Msg.LobbyState, Msg.Feed, Msg.Pick, Msg.Lane }) Net.Off(t);
+    }
+
+    // ================= СЕТЬ =================
+    bool AllPlayersReady() { foreach (var p in Net.Players) if (!p.ready) return false; return true; }
+
+    // Хост → клиенты: фаза лобби, время, кто кем играет
+    void SendLobbyState()
+    {
+        var all = new List<Slot>(slots);
+        all.Insert(0, new Slot { nick = Net.MyNick, team = PlayerTeam, def = myHero, lane = myLane, go = PlayerHero, human = true, client = Net.MyId });
+        float left = Mathf.Max(0f, phaseEnd - Time.unscaledTime);
+        Net.SendToClients(Msg.LobbyState, w =>
+        {
+            w.Write((byte)phase);
+            w.Write(left);
+            w.Write((byte)all.Count);
+            foreach (var sl in all)
+            {
+                w.Write(sl.client); w.Write(sl.human); w.Write(sl.nick ?? ""); w.Write((byte)sl.team);
+                w.Write(sl.def != null ? sl.def.id : ""); w.Write((byte)sl.lane);
+                w.Write(sl.go != null ? NetEntity.IdOf(sl.go.transform) : 0);
+            }
+        });
+    }
+
+    void OnLobbyState(BinaryReader r)
+    {
+        var ph = (Phase)r.ReadByte();
+        float left = r.ReadSingle();
+        int n = r.ReadByte();
+        slots.Clear();
+        for (int i = 0; i < n; i++)
+        {
+            var sl = new Slot { client = r.ReadUInt64(), human = r.ReadBoolean(), nick = r.ReadString(), team = (Team)r.ReadByte() };
+            string hid = r.ReadString();
+            sl.def = hid.Length > 0 ? HeroCatalog.Get(hid) : null;
+            sl.lane = r.ReadByte();
+            sl.entity = r.ReadInt32();
+            var u = NetEntity.FindUnit(sl.entity);
+            sl.go = u != null ? u.gameObject : null;
+            if (sl.client == Net.MyId)
+            {
+                if (myHero == null && sl.def != null) myHero = sl.def;   // не успел — хост дал случайного
+                continue;
+            }
+            if (sl.go != null) { if (!Bots.Contains(sl.go)) Bots.Add(sl.go); if (BotHero == null && sl.team == BotTeam) BotHero = sl.go; }
+            slots.Add(sl);
+        }
+        phaseEnd = Time.unscaledTime + left;
+        if (ph != phase)
+        {
+            if (ph == Phase.Done) { ClientStartMatch(); return; }
+            phase = ph;
+            if (ph == Phase.Lane) botLaneShown = true;
+            if (ph == Phase.Buy && PlayerHero != null) { var shop = PlayerHero.GetComponent<ShopGUI>(); if (shop != null) shop.Open(); }
+        }
+    }
+
+    void ClientStartMatch()
+    {
+        if (PlayerHero != null) { var shop = PlayerHero.GetComponent<ShopGUI>(); if (shop != null) shop.Close(); }
+        InLobby = false;
+        phase = Phase.Done;
+        Time.timeScale = 1f;
+        bannerUntil = Time.time + 4f;
+    }
+
+    // Клиент: хост прислал героя — делаем копию из заготовки
+    public GameObject NetSpawnHero(string heroId, Team team, ulong owner, string disp, Vector3 pos)
+    {
+        GameObject tpl = null;
+        foreach (var t in heroTemplates)
+            if (t != null && t.GetComponent<HeroStats>() != null && t.GetComponent<HeroStats>().heroId == heroId) tpl = t;
+        if (tpl == null) return null;
+        bool mine = owner == Net.MyId;
+        var go = Instantiate(tpl, pos, Quaternion.identity);
+        go.name = disp;
+        var unit = go.GetComponent<Unit>();
+        unit.team = team;
+        unit.displayName = mine ? HeroCatalog.Get(heroId).name : disp;
+        var hc = go.GetComponent<HeroController>();
+        hc.playerControlled = mine;
+        hc.respawnPoint = team == Team.Kurchatov ? spawnKurchatov : spawnMoscow;
+        if (!mine)
+        {
+            DestroyImmediate(go.GetComponent<AbilityBarGUI>());
+            DestroyImmediate(go.GetComponent<ShopGUI>());
+        }
+        var ring = go.transform.Find("Model/TeamRing");
+        if (ring != null) Recolor(ring.gameObject, TeamUtil.GetColor(team));
+        var e = go.AddComponent<NetEntity>();
+        e.owner = owner;
+        go.SetActive(true);
+        if (mine)
+        {
+            PlayerHero = go;
+            myHero = HeroCatalog.Get(heroId);
+            var cam = FindFirstObjectByType<RTSCamera>();
+            if (cam != null)
+            {
+                cam.followTarget = go.transform;
+                cam.transform.position = new Vector3(pos.x, 0f, pos.z);
+            }
+            if (phase == Phase.Buy) { var shop = go.GetComponent<ShopGUI>(); if (shop != null) shop.Open(); }
+        }
+        return go;
+    }
+
+    public int[] KdaArray(GameObject go) { var x = KdaOf(go); return new[] { x.k, x.d, x.a, x.lh, x.dn }; }
+    public void NetSetKda(GameObject go, int[] v) { var x = KdaOf(go); x.k = v[0]; x.d = v[1]; x.a = v[2]; x.lh = v[3]; x.dn = v[4]; }
+    public static void NetSetClock(float matchTime) { if (!InLobby) matchStartTime = Time.time - matchTime; }
+
+    void SendFeed(List<string> lines, Unit dead, Unit killer)
+    {
+        Net.SendToClients(Msg.Feed, w =>
+        {
+            w.Write((byte)lines.Count); foreach (var l in lines) w.Write(l ?? "");
+            w.Write((byte)dead.team);
+            w.Write(NetEntity.IdOf(dead)); w.Write(NetEntity.IdOf(killer));
+        });
+    }
+
+    void OnNetFeed(BinaryReader r)
+    {
+        int n = r.ReadByte();
+        var lines = new List<string>(); for (int i = 0; i < n; i++) lines.Add(r.ReadString());
+        var deadTeam = (Team)r.ReadByte();
+        var dead = NetEntity.FindUnit(r.ReadInt32()); var killer = NetEntity.FindUnit(r.ReadInt32());
+        var me = PlayerHero != null ? PlayerHero.GetComponent<Unit>() : null;
+        bool mine = me != null && (dead == me || killer == me);
+        Color frame = deadTeam == PlayerTeam ? new Color(0.75f, 0.2f, 0.18f) : new Color(0.2f, 0.6f, 0.25f);
+        feed.Add(new Feed { lines = lines, color = frame, until = Time.time + 9f, mine = mine });
+        if (feed.Count > 5) feed.RemoveAt(0);
     }
 
     static void Shuffle<T>(List<T> list)
@@ -286,6 +447,7 @@ public class MatchSetup : MonoBehaviour
         Color frame = du.team == PlayerTeam ? new Color(0.75f, 0.2f, 0.18f) : new Color(0.2f, 0.6f, 0.25f);
         feed.Add(new Feed { lines = lines, color = frame, until = Time.time + 9f, mine = mine });
         if (feed.Count > 5) feed.RemoveAt(0);
+        if (Net.IsHost) SendFeed(lines, du, killer);
     }
 
     void SetPhase(Phase p)
@@ -304,6 +466,13 @@ public class MatchSetup : MonoBehaviour
 
     void Update()
     {
+        // хост рассылает лобби (и после начала — кто кем играет, для таблицы)
+        if (Net.IsHost && Time.unscaledTime >= lobbySendAt) { lobbySendAt = Time.unscaledTime + (InLobby ? 0.25f : 1f); SendLobbyState(); }
+        if (Net.IsClient && InLobby)
+        {
+            // у клиента время лобби ведёт хост
+            return;
+        }
         if (!InLobby)
         {
             var kb = Keyboard.current;
@@ -318,10 +487,12 @@ public class MatchSetup : MonoBehaviour
 
         if (phase == Phase.Pick)
         {
+            // по сети: пока не все загрузили карту — таймер стоит
+            if (Net.IsHost && !AllPlayersReady() && now < waitPlayersUntil) phaseEnd = Mathf.Max(phaseEnd, now + 30f);
             bool all = true;
             foreach (var sl in slots)
             {
-                if (sl.def == null && now >= sl.pickAt) sl.def = HeroCatalog.All[Random.Range(0, HeroCatalog.All.Length)];
+                if (sl.def == null && !sl.human && now >= sl.pickAt) sl.def = HeroCatalog.All[Random.Range(0, HeroCatalog.All.Length)];
                 if (sl.def == null) all = false;
             }
             if (all && myHero != null) phaseEnd = Mathf.Min(phaseEnd, now + 0.9f);
@@ -390,10 +561,11 @@ public class MatchSetup : MonoBehaviour
         foreach (var sl in slots)
         {
             int k = ++idx[sl.team == PlayerTeam ? 0 : 1];
-            sl.go = Spawn(sl.def, sl.team, false, sl.nick, k);
+            sl.go = Spawn(sl.def, sl.team, false, sl.nick, k, sl.human ? sl.client : NetEntity.NoOwner);
             if (sl.go == null) continue;
             Bots.Add(sl.go);
-            sl.go.GetComponent<BotHeroAI>().SetLane(sl.lane);
+            var ai = sl.go.GetComponent<BotHeroAI>();
+            if (ai != null) ai.SetLane(sl.lane);
             if (BotHero == null && sl.team == BotTeam) BotHero = sl.go;
         }
 
@@ -405,7 +577,8 @@ public class MatchSetup : MonoBehaviour
         }
     }
 
-    GameObject Spawn(HeroDefinition def, Team team, bool player, string nick, int index)
+    // human — номер игрока по сети (его героем управляют приказы оттуда, а не бот)
+    GameObject Spawn(HeroDefinition def, Team team, bool player, string nick, int index, ulong human = NetEntity.NoOwner)
     {
         GameObject tpl = null;
         foreach (var t in heroTemplates)
@@ -429,9 +602,10 @@ public class MatchSetup : MonoBehaviour
         if (!player)
         {
             DestroyImmediate(go.GetComponent<AbilityBarGUI>());
-            DestroyImmediate(go.GetComponent<ShopGUI>());
-            go.AddComponent<BotHeroAI>();
+            if (human == NetEntity.NoOwner) { DestroyImmediate(go.GetComponent<ShopGUI>()); go.AddComponent<BotHeroAI>(); }
+            else go.GetComponent<ShopGUI>().enabled = false;   // магазин нужен для покупок по сети, окно — у игрока
         }
+        if (Net.Online) go.AddComponent<NetEntity>().owner = player ? Net.MyId : human;
 
         var ring = go.transform.Find("Model/TeamRing");
         if (ring != null) Recolor(ring.gameObject, TeamUtil.GetColor(team));
@@ -461,6 +635,15 @@ public class MatchSetup : MonoBehaviour
         if (PlayerHero != null) Courier.Spawn(PlayerHero.GetComponent<HeroController>());
         foreach (var b in Bots)
             if (b != null && b.GetComponent<HeroController>() != null) Courier.Spawn(b.GetComponent<HeroController>());
+
+        // Игроки по сети тоже идут на свои линии
+        foreach (var sl in slots)
+            if (sl.human && sl.go != null)
+            {
+                var team = sl.go.GetComponent<Unit>().team;
+                Vector3 to = sl.lane == 3 ? LaneData.JungleStart(team) : LaneData.LaneStart(team, (LaneData.Lane)sl.lane);
+                sl.go.GetComponent<HeroController>().MoveTo(to);
+            }
 
         // Идём на выбранную линию
         if (PlayerHero != null)
@@ -524,7 +707,7 @@ public class MatchSetup : MonoBehaviour
             var st = new GUIStyle(bold) { fontSize = Mathf.RoundToInt(24 * s), alignment = TextAnchor.MiddleLeft };
             st.normal.textColor = new Color(1f, 0.8f, 0.25f);
             GUI.Label(new Rect(r.x + 18 * s, r.y, 300 * s, r.height), $"СТАРТОВЫЙ ЗАКУП  {left}", st);
-            if (GUI.Button(new Rect(r.xMax - 170 * s, r.y + 10 * s, 156 * s, 46 * s), "ГОТОВ", btn)) Next();
+            if (!Net.IsClient && GUI.Button(new Rect(r.xMax - 170 * s, r.y + 10 * s, 156 * s, 46 * s), "ГОТОВ", btn)) Next();
             return;
         }
 
@@ -631,11 +814,12 @@ public class MatchSetup : MonoBehaviour
         GUILayout.EndArea();
 
         GUI.Label(new Rect(foot.x, foot.y, foot.width - 400 * s, foot.height),
-            myHero != null ? "Ждём, пока все выберут героев…" : "Нажми на героя, потом «ВЫБРАТЬ». Не успеешь — дадут случайного.", label);
+            Net.IsHost && !AllPlayersReady() ? "Ждём, пока все игроки загрузят карту…" : myHero != null ? "Ждём, пока все выберут героев…" : "Нажми на героя, потом «ВЫБРАТЬ». Не успеешь — дадут случайного.", label);
         GUI.enabled = myHero == null;
         if (GUI.Button(new Rect(foot.xMax - 360 * s, foot.y, 360 * s, foot.height), myHero != null ? "ВЫБРАН" : "ВЫБРАТЬ", btn))
         {
             myHero = pick;
+            if (Net.IsClient) Net.SendToHost(Msg.Pick, w => w.Write(myHero.id));
             VoiceLines.Speak(myHero.id, Vector3.zero, 1f, true, -1, myHero.deathVoice, true);
             bool all = true; foreach (var sl in slots) if (sl.def == null) all = false;
             if (all) phaseEnd = Mathf.Min(phaseEnd, Time.unscaledTime + 0.7f);
@@ -678,7 +862,7 @@ public class MatchSetup : MonoBehaviour
             var ls = new GUIStyle(center) { fontSize = Mathf.RoundToInt(24 * s) };
             ls.normal.textColor = myLane == i ? new Color(0.1f, 0.06f, 0.02f) : new Color(1f, 0.8f, 0.25f);
             GUI.Label(b, LaneNames[i], ls);
-            if (GUI.Button(b, GUIContent.none, GUIStyle.none)) { myLane = i; AssignAllyLanes(); }
+            if (GUI.Button(b, GUIContent.none, GUIStyle.none)) { myLane = i; AssignAllyLanes(); if (Net.IsClient) Net.SendToHost(Msg.Lane, w => w.Write((byte)i)); }
         }
 
         var info = new Rect(map.xMax + 24 * s, body.y, body.xMax - map.xMax - 24 * s, body.height);
@@ -690,7 +874,7 @@ public class MatchSetup : MonoBehaviour
             ". Союзные боты займут остальные линии, куда пойдут враги — секрет.</color>", label);
 
         GUI.Label(new Rect(foot.x, foot.y, foot.width - 400 * s, foot.height), "Выбери, куда встанешь в начале игры.", label);
-        if (GUI.Button(new Rect(foot.xMax - 360 * s, foot.y, 360 * s, foot.height), "ГОТОВ", btn)) Next();
+        if (!Net.IsClient && GUI.Button(new Rect(foot.xMax - 360 * s, foot.y, 360 * s, foot.height), "ГОТОВ", btn)) Next();
     }
 
     void DrawPortrait(Rect r, HeroDefinition h)

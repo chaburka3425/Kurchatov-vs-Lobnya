@@ -107,9 +107,14 @@ public class ItemEffects : MonoBehaviour
     }
 
     // Ближайшая своя постройка к выбранной точке: башня, трон или баня
+    // Хост: предмет по приказу из сети (блинк — в присланную точку)
+    public void NetUse(int slot, Vector3 point) { blinkTarget = point; Use(slot); blinkTarget = null; }
+    public void NetSetTeleport(bool on, float progress, string label) { IsTeleporting = on; TeleportProgress = progress; TeleportLabel = label; }
+
     public void TicketAtWorld(Vector3 point)
     {
         TpTargeting = false;
+        if (Net.IsClient) { NetCmd.Ticket(point, false); return; }
         if (!CanTp) { PressTicket(); TpTargeting = false; return; }
         Vector3 best = BasePoint(); string where = "в баню";
         float bd = Flat(point, best);
@@ -130,6 +135,7 @@ public class ItemEffects : MonoBehaviour
     public void TicketTo(Vector3 dest, string label)
     {
         if (!CanTp) return;
+        if (Net.IsClient) { NetCmd.Ticket(dest, true); return; }
         inv.TpCharges--;
         inv.TpCooldownLeft = TicketCooldown;
         StartCoroutine(Teleport(TicketChannel, dest, label, true));
@@ -221,6 +227,7 @@ public class ItemEffects : MonoBehaviour
         if (d.active == ItemActive.None) { Say("У предмета нет активки"); return; }
         if (it.cooldownLeft > 0f) { Say($"Перезарядка: {Mathf.CeilToInt(it.cooldownLeft)} сек."); return; }
         if (status != null && status.IsStunned) { Say("Оглушён!"); return; }
+        if (Net.IsClient) { NetCmd.UseItem(slot, MouseWorld() ?? transform.position + transform.forward * d.activeValue); return; }
 
         switch (d.active)
         {

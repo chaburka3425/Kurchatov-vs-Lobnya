@@ -16,6 +16,7 @@ public static class Glyph
 
     public static bool IsActive(Team t) => t != Team.Neutral && Time.time < endTime[(int)t];
     public static float CooldownLeft(Team t) => Mathf.Max(0f, readyTime[(int)t] - Time.time);
+    public static float ActiveLeft(Team t) => t == Team.Neutral ? 0f : Mathf.Max(0f, endTime[(int)t] - Time.time);
 
     // Защищён ли юнит глифом прямо сейчас
     public static bool Protects(Unit u)
@@ -24,9 +25,13 @@ public static class Glyph
         return u.kind == UnitKind.Structure || u.kind == UnitKind.Creep;
     }
 
+    // Клиент сети: таймеры глифа приходят от хоста
+    public static void NetSet(Team t, float activeLeft, float cdLeft) { endTime[(int)t] = Time.time + activeLeft; readyTime[(int)t] = Time.time + cdLeft; }
+
     public static bool Use(Team t)
     {
         if (t == Team.Neutral) return false;
+        if (Net.IsClient) { if (CooldownLeft(t) > 0f) return false; NetCmd.Glyph(); return true; }
         if (CooldownLeft(t) > 0f) return false;
         endTime[(int)t] = Time.time + Duration;
         readyTime[(int)t] = Time.time + Cooldown;

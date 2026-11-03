@@ -30,7 +30,20 @@ public class MainMenu : MonoBehaviour
 
     static readonly Color Accent = new Color(0.9f, 0.12f, 0.1f);
 
-    void Start() => Time.timeScale = 1f;
+    static bool urlChecked;
+
+    void Start()
+    {
+        Time.timeScale = 1f;
+        // открыли по ссылке-приглашению — сразу заходим
+        if (!urlChecked && !Net.Online)
+        {
+            urlChecked = true;
+            string code = Net.CodeFromUrl();
+            if (code.Length > 0) { friends = true; joinCode = code; Net.JoinRelay(code); }
+            else if ((Application.absoluteURL ?? "").Contains("host=1")) { friends = true; Net.HostRelay(Team.Kurchatov); }
+        }
+    }
 
     void Update()
     {
@@ -63,8 +76,96 @@ public class MainMenu : MonoBehaviour
             case Tab.Settings: DrawSettings(content); break;
         }
 
+        if (friends || Net.Online) { DrawFriends(content); return; }
         DrawPlayButton();
         if (search == Search.Found) DrawMatchFound();
+    }
+
+    // ---------------- Игра с друзьями ----------------
+    bool friends;
+    string joinCode = "", joinIp = "127.0.0.1";
+    bool showIp;
+
+    void DrawFriends(Rect c)
+    {
+        GUI.color = new Color(0, 0, 0, 0.75f);
+        GUI.DrawTexture(new Rect(0, 80 * s, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = Color.white;
+        float w = Mathf.Min(1100 * s, Screen.width - 40 * s), h = Mathf.Min(760 * s, Screen.height - 120 * s);
+        var r = new Rect((Screen.width - w) / 2, 100 * s, w, h);
+        GUI.color = new Color(0.09f, 0.06f, 0.06f, 1f);
+        GUI.DrawTexture(r, Texture2D.whiteTexture);
+        GUI.color = Color.white;
+        Panel(r, "ИГРА С ДРУЗЬЯМИ");
+        float x = r.x + 30 * s, y = r.y + 70 * s, iw = r.width - 60 * s;
+        var big = new GUIStyle(bold) { fontSize = Mathf.RoundToInt(64 * s), alignment = TextAnchor.MiddleCenter };
+        big.normal.textColor = new Color(1f, 0.8f, 0.25f);
+        var field = new GUIStyle(GUI.skin.textField) { fontSize = Mathf.RoundToInt(30 * s), alignment = TextAnchor.MiddleLeft };
+
+        if (!Net.Online)
+        {
+            if (GUI.Button(new Rect(r.xMax - 70 * s, r.y + 10 * s, 56 * s, 44 * s), "X", smallBtn)) friends = false;
+            GUI.Label(new Rect(x, y, 200 * s, 50 * s), "Твой ник:", bold);
+            Net.MyNick = GUI.TextField(new Rect(x + 200 * s, y, 360 * s, 50 * s), Net.MyNick, 16, field);
+            y += 80 * s;
+            GUI.enabled = !Net.Busy;
+            if (GUI.Button(new Rect(x, y, iw * 0.48f, 100 * s), "СОЗДАТЬ ИГРУ", playStyle)) Net.HostRelay(Team.Kurchatov);
+            GUI.Label(new Rect(x + iw * 0.52f, y, iw * 0.48f, 40 * s), "Код от друга:", bold);
+            joinCode = GUI.TextField(new Rect(x + iw * 0.52f, y + 44 * s, iw * 0.25f, 56 * s), joinCode, 8, field).ToUpperInvariant();
+            if (GUI.Button(new Rect(x + iw * 0.78f, y + 44 * s, iw * 0.22f, 56 * s), "ВОЙТИ", smallBtn) && joinCode.Length > 0) Net.JoinRelay(joinCode);
+            y += 130 * s;
+            GUI.Label(new Rect(x, y, iw, 90 * s), "Создай игру и скинь другу код. Он вводит код и жмёт «ВОЙТИ». Пустые места займут боты.", label);
+            y += 100 * s;
+            if (GUI.Button(new Rect(x, y, 320 * s, 44 * s), showIp ? "- по IP (одна сеть)" : "+ по IP (одна сеть)", smallBtn)) showIp = !showIp;
+            if (showIp)
+            {
+                y += 56 * s;
+                if (GUI.Button(new Rect(x, y, 300 * s, 50 * s), "Создать по IP", smallBtn)) Net.HostDirect(Team.Kurchatov);
+                joinIp = GUI.TextField(new Rect(x + 320 * s, y, 300 * s, 50 * s), joinIp, 40, field);
+                if (GUI.Button(new Rect(x + 640 * s, y, 240 * s, 50 * s), "Войти по IP", smallBtn)) Net.JoinDirect(joinIp.Trim());
+            }
+            GUI.enabled = true;
+            GUI.Label(new Rect(x, r.yMax - 70 * s, iw, 50 * s), Net.Status, label);
+            return;
+        }
+
+        // Мы в комнате
+        GUI.Label(new Rect(x, y, iw, 40 * s), Net.IsHost ? "Скинь друзьям этот код:" : "Код комнаты:", bold);
+        GUI.Label(new Rect(x, y + 36 * s, iw * 0.6f, 90 * s), Net.Code, big);
+        if (Net.Code.Length > 0 && GUI.Button(new Rect(x + iw * 0.62f, y + 30 * s, 300 * s, 50 * s), "Копировать код", smallBtn)) GUIUtility.systemCopyBuffer = Net.Code;
+        string link = Net.InviteLink;
+        if (link.Length > 0 && GUI.Button(new Rect(x + iw * 0.62f, y + 86 * s, 300 * s, 50 * s), "Копировать ссылку", smallBtn)) GUIUtility.systemCopyBuffer = link;
+        y += 140 * s;
+
+        float colW = (iw - 30 * s) / 2f;
+        foreach (var team in new[] { Team.Kurchatov, Team.Lobnya })
+        {
+            float cx = team == Team.Kurchatov ? x : x + colW + 30 * s;
+            var head = new GUIStyle(bold); head.normal.textColor = TeamUtil.GetColor(team);
+            GUI.Label(new Rect(cx, y, colW, 40 * s), TeamUtil.GetName(team).ToUpper(), head);
+            float py = y + 46 * s;
+            int count = 0;
+            foreach (var p in Net.Players)
+            {
+                if (p.team != team) continue;
+                count++;
+                GUI.DrawTexture(new Rect(cx, py, colW, 44 * s), darkBtn);
+                GUI.Label(new Rect(cx + 14 * s, py, colW, 44 * s), p.nick + (p.id == Net.MyId ? "  (ты)" : "") + (p.id == 0 ? "  ★" : ""), label);
+                py += 50 * s;
+            }
+            for (int i = count; i < 5; i++) { GUI.Label(new Rect(cx + 14 * s, py, colW, 40 * s), "<color=#777>бот</color>", label); py += 44 * s; }
+            var me = Net.Me;
+            if (me != null && me.team != team && GUI.Button(new Rect(cx, py + 6 * s, colW, 50 * s), "Перейти сюда", smallBtn)) Net.ChooseTeam(team);
+        }
+
+        float by = r.yMax - 120 * s;
+        GUI.Label(new Rect(x, by - 46 * s, iw, 40 * s), Net.Status, label);
+        if (Net.IsHost)
+        {
+            if (GUI.Button(new Rect(r.xMax - 30 * s - 420 * s, by, 420 * s, 100 * s), "НАЧАТЬ", playStyle)) Net.StartMatch();
+        }
+        else GUI.Label(new Rect(x, by, iw * 0.6f, 100 * s), "Ждём, пока хост начнёт игру…", bold);
+        if (GUI.Button(new Rect(x, by + 25 * s, 220 * s, 56 * s), "ВЫЙТИ", smallBtn)) { Net.Leave(); friends = false; }
     }
 
     // ---------------- Верхняя панель ----------------
@@ -419,6 +520,7 @@ public class MainMenu : MonoBehaviour
         var mode = new GUIStyle(label) { alignment = TextAnchor.MiddleRight, wordWrap = false, clipping = TextClipping.Overflow };
         mode.fontSize = Mathf.RoundToInt(20 * s);
         GUI.Label(new Rect(r.x - 200 * s, r.y - 38 * s, r.width + 200 * s, 32 * s), "Режим: против ботов · команда случайная", mode);
+        if (search == Search.Idle && GUI.Button(new Rect(r.x - 360 * s, r.y + 20 * s, 340 * s, r.height - 20 * s), "С ДРУЗЬЯМИ", smallBtn)) friends = true;
 
         if (search == Search.Idle)
         {

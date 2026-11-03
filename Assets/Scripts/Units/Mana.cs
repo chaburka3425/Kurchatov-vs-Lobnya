@@ -31,6 +31,8 @@ public class Mana : MonoBehaviour
 
     public void Refill() => Current = maxMana;
 
+    public void NetSet(float cur, float max) { Current = cur; maxMana = max; }
+
     public void SetMaxKeepRatio(float max)
     {
         float ratio = maxMana > 0f ? Current / maxMana : 1f;

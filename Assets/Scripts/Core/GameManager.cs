@@ -29,7 +29,7 @@ public class GameManager : MonoBehaviour
     void SetPaused(bool paused)
     {
         IsPaused = paused;
-        Time.timeScale = paused ? 0f : 1f;
+        Time.timeScale = paused && !Net.Online ? 0f : 1f;   // по сети время не останавливаем
     }
 
     public void OnThroneDestroyed(Team loser)
@@ -38,6 +38,7 @@ public class GameManager : MonoBehaviour
         IsGameOver = true;
         Winner = loser == Team.Kurchatov ? Team.Lobnya : Team.Kurchatov;
         Time.timeScale = 0f;
+        NetWorld.GameOverEvent(Winner);
         Debug.Log($"Трон города {TeamUtil.GetName(loser)} разрушен! Победил город {TeamUtil.GetName(Winner)}.");
     }
 
@@ -74,7 +75,7 @@ public class GameManager : MonoBehaviour
             style.normal.textColor = TeamUtil.GetColor(Winner);
             GUI.Label(new Rect(rect.x, rect.y + 15, w, 60), $"Победил город {TeamUtil.GetName(Winner)}!", style);
 
-            if (GUI.Button(new Rect(bx, by, 200, 40), "Играть ещё раз"))
+            if (!Net.Online && GUI.Button(new Rect(bx, by, 200, 40), "Играть ещё раз"))
             {
                 Time.timeScale = 1f;
                 SceneManager.LoadScene(SceneManager.GetActiveScene().name);
@@ -92,8 +93,18 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // Клиент сети: хост сообщил, что трон пал
+    public void NetGameOver(Team winner)
+    {
+        if (IsGameOver) return;
+        IsGameOver = true;
+        Winner = winner;
+        Time.timeScale = 0f;
+    }
+
     void GoToMenu()
     {
+        if (Net.Online) { Net.Leave(); return; }
         Time.timeScale = 1f;
         SceneManager.LoadScene(MenuSceneName);
     }

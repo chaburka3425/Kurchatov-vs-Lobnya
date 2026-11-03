@@ -178,7 +178,7 @@ public class Courier : MonoBehaviour
     public bool IsDead => state == State.Dead;
     public bool IsFree => state == State.Idle;
     public float RespawnLeft => Mathf.Max(0f, respawnAt - Time.time);
-    public int CarriedCount => carried.Count;
+    public int CarriedCount => Net.IsClient ? netCarried : carried.Count;
     public string StateText => state switch
     {
         State.ToBase => "идёт за вещами",
@@ -191,6 +191,7 @@ public class Courier : MonoBehaviour
     // F / кнопка: доставить вещи из тайника
     public void Deliver()
     {
+        if (Net.IsClient) { NetCmd.Courier(); return; }
         if (state == State.Dead) { Say($"Курьер убит — вернётся через {Mathf.CeilToInt(RespawnLeft)} сек."); return; }
         if (ownerInv == null) return;
         if (carried.Count == 0 && ownerInv.Stash.Count == 0) { Say("Тайник пуст — купи что-нибудь в магазине (B)"); return; }
@@ -200,9 +201,26 @@ public class Courier : MonoBehaviour
         Say("Курьер в пути!", new Color(0.6f, 1f, 0.6f));
     }
 
+    // Клиент сети: состояние курьера приходит от хоста
+    int netCarried;
+    public byte NetState => (byte)state;
+    public void NetSet(byte st, float respawnLeft, int carriedCount, bool upgraded)
+    {
+        var ns = (State)st;
+        if ((ns == State.Dead) != (state == State.Dead)) SetVisible(ns != State.Dead);
+        state = ns; respawnAt = Time.time + respawnLeft; netCarried = carriedCount;
+        if (upgraded && !Upgraded) Upgrade();
+    }
+
     void Update()
     {
         if (MatchSetup.InLobby) return;
+        if (Net.IsClient)
+        {
+            var k = Keyboard.current;
+            if (k != null && k.fKey.wasPressedThisFrame && owner != null && owner.playerControlled) NetCmd.Courier();
+            return;
+        }
 
         if (state == State.Dead)
         {

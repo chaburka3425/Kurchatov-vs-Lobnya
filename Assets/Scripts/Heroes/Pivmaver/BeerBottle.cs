@@ -9,6 +9,7 @@ public class BeerBottle : MonoBehaviour
     public const float LifeTime = 60f, Leash = 6f;
 
     PivmaverKit owner;
+    public PivmaverKit Owner => owner;
     Unit ownerUnit, unit;
     Health health;
     NavMeshAgent agent;

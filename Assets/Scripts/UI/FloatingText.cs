@@ -11,8 +11,11 @@ public class FloatingText : MonoBehaviour
     Vector3 worldPos;
     float start;
 
+    public static bool NoNet;   // не пересылать по сети (цифры урона — у каждого свои)
+
     public static void Show(Vector3 worldPos, string text, Color color, int size = 24)
     {
+        if (!NoNet) NetWorld.TextEvent(worldPos, text, color, size);
         var go = new GameObject("FloatingText");
         var f = go.AddComponent<FloatingText>();
         f.text = text;

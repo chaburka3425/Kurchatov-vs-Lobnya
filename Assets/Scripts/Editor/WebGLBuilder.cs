@@ -9,7 +9,8 @@ public static class WebGLBuilder
     [MenuItem("Tools/MOBA/Собрать для браузера (WebGL)")]
     public static void Build()
     {
-        MapBuilder.Build();   // свежая карта со всеми правками билдеров
+        if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-skipMap") < 0)
+            MapBuilder.Build();   // свежая карта со всеми правками билдеров
 
         // GitHub Pages не отдаёт сжатые .gz/.br с нужными заголовками — собираем без сжатия
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;

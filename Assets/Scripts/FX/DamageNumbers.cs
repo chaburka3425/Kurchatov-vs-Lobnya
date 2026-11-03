@@ -4,7 +4,6 @@ using UnityEngine;
 // Показывает урон, который нанёс или получил твой герой.
 public class DamageNumbers : MonoBehaviour
 {
-    Unit hero => HeroController.Player != null ? HeroController.Player.GetComponent<Unit>() : null;
 
     void Start()
     {
@@ -15,8 +14,18 @@ public class DamageNumbers : MonoBehaviour
 
     void OnDamaged(Health target, DamageInfo info, float dealt)
     {
-        if (hero == null || dealt < 1f) return;
+        if (dealt < 1f) return;
         var tu = target.GetComponent<Unit>();
+        NetWorld.DmgEvent(tu, info.source, dealt, info.crit, info.type);
+        Show(tu, info.source, dealt, info.crit, info.type);
+    }
+
+    // Показать цифру, если урон нанёс или получил свой герой (по сети приходит от хоста)
+    public static void Show(Unit tu, Unit source, float dealt, bool crit, DamageType type)
+    {
+        var hero = HeroController.Player != null ? HeroController.Player.GetComponent<Unit>() : null;
+        if (hero == null || tu == null) return;
+        var info = new DamageInfo { source = source, crit = crit, type = type };
         bool byHero = info.source == hero;
         bool toHero = tu == hero;
         if (!byHero && !toHero) return;
@@ -31,6 +40,8 @@ public class DamageNumbers : MonoBehaviour
         else { c = Color.white; size = 20; }
 
         Vector3 jitter = new Vector3(Random.Range(-0.5f, 0.5f), 0f, Random.Range(-0.5f, 0.5f));
-        FloatingText.Show(target.transform.position + Vector3.up * 2.2f + jitter, text, c, size);
+        FloatingText.NoNet = true;
+        FloatingText.Show(tu.transform.position + Vector3.up * 2.2f + jitter, text, c, size);
+        FloatingText.NoNet = false;
     }
 }

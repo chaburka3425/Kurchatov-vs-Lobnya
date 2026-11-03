@@ -92,10 +92,11 @@ public class UnitAnimator : MonoBehaviour
     }
 
     // ---------- Вызовы из атаки и способностей ----------
-    public void Windup(float time) { Play(Mode.Windup, Mathf.Max(0.05f, time)); }
-    public void Strike() { Play(Mode.Strike, gun ? 0.22f : 0.3f); }
-    public void Cancel() { if (mode == Mode.Windup) mode = Mode.None; }
-    public void Cast(int abilitySlot) { slot = abilitySlot; Play(Mode.Cast, abilitySlot == 3 ? 0.65f : 0.45f); }
+    public float NetSpeed;   // скорость, пришедшая по сети (у копий юнитов на клиенте нет NavMeshAgent)
+    public void Windup(float time) { NetWorld.Anim(gameObject, 1, time); Play(Mode.Windup, Mathf.Max(0.05f, time)); }
+    public void Strike() { NetWorld.Anim(gameObject, 2, 0f); Play(Mode.Strike, gun ? 0.22f : 0.3f); }
+    public void Cancel() { NetWorld.Anim(gameObject, 3, 0f); if (mode == Mode.Windup) mode = Mode.None; }
+    public void Cast(int abilitySlot) { NetWorld.Anim(gameObject, 4, abilitySlot); slot = abilitySlot; Play(Mode.Cast, abilitySlot == 3 ? 0.65f : 0.45f); }
 
     void Play(Mode m, float d) { mode = m; t = 0f; dur = d; }
 
@@ -140,7 +141,7 @@ public class UnitAnimator : MonoBehaviour
         }
 
         // Ходьба: покачивание корпуса, у паучьих ног — шаги
-        float speed = agent != null && agent.enabled ? new Vector2(agent.velocity.x, agent.velocity.z).magnitude : 0f;
+        float speed = agent != null && agent.enabled ? new Vector2(agent.velocity.x, agent.velocity.z).magnitude : NetSpeed;
         walkBlend = Mathf.MoveTowards(walkBlend, speed > 0.4f ? 1f : 0f, Time.deltaTime * 5f);
         walk += Time.deltaTime * (2.5f + speed * 1.4f);
         float bob = legs.Count > 0 && !biped ? 0.05f * Mathf.Sin(walk * 2f) : 0.07f * Mathf.Abs(Mathf.Sin(walk));

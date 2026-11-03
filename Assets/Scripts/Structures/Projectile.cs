@@ -19,6 +19,7 @@ public class Projectile : MonoBehaviour
         ProjectileShape shape, Color color, float size,
         DamageType damageType = DamageType.Physical, System.Action<Unit> onHit = null, bool crit = false)
     {
+        NetWorld.ProjEvent(from, target, speed, shape, color, size);
         bool bullet = shape == ProjectileShape.Bullet;
         var go = bullet ? new GameObject("Projectile") : GameObject.CreatePrimitive(shape == ProjectileShape.Disc ? PrimitiveType.Cylinder : PrimitiveType.Sphere);
         go.name = "Projectile";

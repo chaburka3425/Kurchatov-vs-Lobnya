@@ -79,7 +79,7 @@ public class HeroController : MonoBehaviour
         var target = hit.collider.GetComponentInParent<Unit>();
         if (target != null && target != unit && target.IsAlive && unit.IsEnemyOf(target))
         {
-            attack.SetTarget(target);
+            if (Net.IsClient) NetCmd.Attack(target); else attack.SetTarget(target);
             Fx.ClickMarker(target.transform.position, new Color(1f, 0.3f, 0.25f, 0.95f));   // красная метка — атака
             return;
         }
@@ -89,13 +89,14 @@ public class HeroController : MonoBehaviour
         if (target != null && target != unit && target.IsAlive && target.kind == UnitKind.Creep && target.team == unit.team && target.GetComponent<Courier>() == null
             && target.Health != null && target.Health.Current < target.Health.maxHealth * 0.5f)
         {
-            attack.SetTarget(target);
+            if (Net.IsClient) NetCmd.Attack(target); else attack.SetTarget(target);
             return;
         }
 
         // Иначе — идём в точку.
         if (NavMesh.SamplePosition(hit.point, out NavMeshHit navHit, 3f, NavMesh.AllAreas))
         {
+            if (Net.IsClient) { NetCmd.Move(navHit.position); Fx.ClickMarker(navHit.position, new Color(0.45f, 1f, 0.5f, 0.95f)); return; }
             agent.isStopped = false;
             agent.SetDestination(navHit.position);
             attack.OrderMove();
@@ -108,14 +109,18 @@ public class HeroController : MonoBehaviour
     {
         if (!unit.IsAlive || (status != null && status.IsStunned)) return;
         if (!NavMesh.SamplePosition(world, out NavMeshHit navHit, 6f, NavMesh.AllAreas)) return;
+        if (Net.IsClient) { NetCmd.Move(navHit.position); return; }
         if (caster != null) caster.CancelPending();
         agent.isStopped = false;
         agent.SetDestination(navHit.position);
         attack.OrderMove();
     }
 
+    public void NetSetRespawn(float at) => RespawnAt = at;
+
     public void Stop()
     {
+        if (Net.IsClient) { NetCmd.Stop(); return; }
         attack.ClearTarget();
         agent.isStopped = true;
         agent.ResetPath();

@@ -100,9 +100,12 @@ public class HeroProgress : MonoBehaviour
         return SkillPoints > 0 && a.Level < a.MaxLevel && Level >= RequiredHeroLevel(a);
     }
 
+    public void NetSet(float xp, int sp, int gold) { Xp = xp; SkillPoints = sp; Gold = gold; }
+
     public bool Learn(int index)
     {
         if (!CanLearn(index)) return false;
+        if (Net.IsClient) { NetCmd.Learn(index); return true; }
         var a = caster.Abilities[index];
         int lvl = a.Level + 1;
         foreach (var b in caster.Abilities)

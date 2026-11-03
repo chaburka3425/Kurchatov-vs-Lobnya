@@ -44,7 +44,13 @@ public class ShopGUI : MonoBehaviour
         if (MatchSetup.InLobby && !MatchSetup.InBuyPhase) return;
         if (kb != null && kb.bKey.wasPressedThisFrame) Toggle();
 
-        // у бани вещи из тайника сами переходят в инвентарь
+        TransferStash();
+    }
+
+    // у бани вещи из тайника сами переходят в инвентарь (по сети — только на хосте)
+    public void TransferStash()
+    {
+        if (Net.IsClient) return;
         if (inv != null && inv.Stash.Count > 0 && unit.IsAlive && !MatchSetup.InLobby && NearShop())
         {
             for (int i = inv.Stash.Count - 1; i >= 0; i--)
@@ -74,6 +80,7 @@ public class ShopGUI : MonoBehaviour
     public void Buy(ItemDef d)
     {
         if (d == null) return;
+        if (Net.IsClient) { NetCmd.Buy(d.id); ParticleBurst.Spawn(transform.position + Vector3.up * 2.5f, Gold, 10); return; }
         if (!NearShop() && d.id != Inventory.ScooterId)
         {
             // далеко от бани — в тайник, курьер привезёт

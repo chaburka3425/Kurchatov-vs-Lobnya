@@ -11,7 +11,11 @@ public class StatusEffects : MonoBehaviour
 
     // Невидимость (Засада): враги не видят, не могут выбрать целью. Снимается вручную или по времени.
     float invisEnd, revealEnd;
-    public bool IsInvisible => Time.time < invisEnd && Time.time >= revealEnd;   // перец проявляет невидимых
+    public bool IsInvisible => Net.IsClient ? NetInvisible : Time.time < invisEnd && Time.time >= revealEnd;   // перец проявляет невидимых
+    public bool NetInvisible;   // клиент сети: невидимость приходит от хоста
+
+    // Клиент сети: иконки эффектов приходят от хоста
+    public void NetSetShown(List<Shown> list) { shown.Clear(); shown.AddRange(list); }
     public bool IsRevealed => Time.time < revealEnd;
     public void Reveal(float duration, string name, string icon)
     {

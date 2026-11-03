@@ -25,6 +25,7 @@ public static class Fx
     // Кольцо по земле: расходится от r0 до r1 и гаснет
     public static void Ring(Vector3 pos, Color c, float r0, float r1, float life, float width = 0.14f)
     {
+        if (NetWorld.SkipFx(1, pos, c, r0, r1, life, width)) return;
         var lr = MaxFx.Line("FxRing", c, width, true);
         var a = lr.gameObject.AddComponent<FxAnim>();
         a.kind = FxAnim.Kind.Ring; a.pos = pos + Vector3.up * 0.08f; a.r0 = r0; a.r1 = r1; a.life = life; a.color = c; a.width = width; a.lr = lr;
@@ -34,6 +35,7 @@ public static class Fx
     // Ударная волна: кольцо + светлый диск на земле
     public static void Shockwave(Vector3 pos, Color c, float radius, float life = 0.5f)
     {
+        if (NetWorld.SkipFx(2, pos, c, radius, life)) return;
         Ring(pos, c, radius * 0.2f, radius, life, 0.22f);
         Ring(pos, Color.Lerp(c, Color.white, 0.5f), radius * 0.1f, radius * 0.7f, life * 0.8f, 0.1f);
         var disc = Make("FxDisc", PrimitiveType.Cylinder, pos + Vector3.up * 0.05f, new Vector3(0.1f, 0.005f, 0.1f));
@@ -45,6 +47,7 @@ public static class Fx
     // Столб света (уровень, воскрешение): поднимается и тает
     public static void Pillar(Vector3 pos, Color c, float height = 6f, float radius = 0.9f, float life = 1.2f)
     {
+        if (NetWorld.SkipFx(3, pos, c, height, radius, life)) return;
         foreach (var (k, a0) in new[] { (1f, 0.35f), (0.45f, 0.7f) })
         {
             var go = Make("FxPillar", PrimitiveType.Cylinder, pos + Vector3.up * height * 0.5f, new Vector3(radius * 2f * k, height * 0.5f, radius * 2f * k));
@@ -57,6 +60,7 @@ public static class Fx
     // Вспышка: светящийся шар быстро раздувается и гаснет
     public static void Flash(Vector3 pos, Color c, float size = 1.2f, float life = 0.25f)
     {
+        if (NetWorld.SkipFx(4, pos, c, size, life)) return;
         var go = Make("FxFlash", PrimitiveType.Sphere, pos, Vector3.one * size * 0.3f);
         var a = go.AddComponent<FxAnim>();
         a.kind = FxAnim.Kind.Flash; a.r0 = size * 0.3f; a.r1 = size; a.life = life; a.color = new Color(c.r, c.g, c.b, 0.75f);
@@ -66,6 +70,7 @@ public static class Fx
     // Мерцающие искры: медленно поднимаются, крутятся и гаснут
     public static void Glints(Vector3 pos, Color c, int n, float radius = 0.8f, float rise = 1.8f, float life = 1.1f)
     {
+        if (NetWorld.SkipFx(5, pos, c, radius, rise, life, 0f, n)) return;
         for (int i = 0; i < n; i++)
         {
             Vector2 p = Random.insideUnitCircle * radius;
@@ -81,6 +86,7 @@ public static class Fx
     public static void Coins(Vector3 from, Transform to, int n)
     {
         if (to == null) return;
+        if (NetWorld.SkipCoins(from, to, n)) return;
         for (int i = 0; i < n; i++)
         {
             var go = Make("FxCoin", PrimitiveType.Cylinder, from + Vector3.up * 1.2f, new Vector3(0.28f, 0.03f, 0.28f));
@@ -110,6 +116,7 @@ public static class Fx
     // Всё сразу для «большого» события
     public static void Burst(Vector3 pos, Color c, float radius)
     {
+        if (NetWorld.SkipFx(6, pos, c, radius)) return;
         Shockwave(pos, c, radius);
         Flash(pos + Vector3.up * 1.2f, c, radius * 0.9f, 0.3f);
         Glints(pos, c, 10, radius * 0.6f);
