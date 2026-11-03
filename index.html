@@ -1,150 +1,107 @@
 <!DOCTYPE html>
-<html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity Web Player | KurchatovVsLobnya</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
-  </head>
-  <body>
-    <div id="unity-container" class="unity-desktop">
-      <div id="unity-fullscreen-container">
-        <canvas id="unity-canvas" width="960" height="600" tabindex="-1"></canvas>
-        <div id="unity-loading-container">
-          <div id="unity-loading-bar">
-            <div id="unity-logo"></div>
-            <div id="unity-progress-bar-empty">
-              <div id="unity-progress-bar-full"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div id="unity-warning"> </div>
-      <div id="unity-footer">
-        <div id="unity-logo-title-footer"></div>
-        <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">KurchatovVsLobnya</div>
-      </div>
-    </div>
-    <script>
-      let canvas = document.querySelector("#unity-canvas");
-      let fullscreenContainer = document.querySelector("#unity-fullscreen-container");
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+  <meta name="theme-color" content="#140a0a">
+  <title>МПКА 2 — Курчатов vs Москва</title>
+  <link rel="shortcut icon" href="TemplateData/favicon.ico">
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #140a0a; color: #fff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
+    #game { position: fixed; inset: 0; }
+    #unity-canvas { width: 100%; height: 100%; display: block; background: #140a0a; outline: none; }
+    #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #140a0a; }
+    #loading h1 { margin: 0; font-size: clamp(36px, 9vw, 84px); color: #e21f19; letter-spacing: 2px; }
+    #loading p { margin: 0; color: #cfc4c0; font-size: clamp(14px, 3.5vw, 20px); }
+    #bar { width: min(70vw, 520px); height: 14px; background: #3a2422; border-radius: 7px; overflow: hidden; }
+    #fill { width: 0; height: 100%; background: linear-gradient(90deg, #e21f19, #ffc23d); transition: width .2s; }
+    #rotate { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      background: rgba(20, 10, 10, .96); z-index: 20; text-align: center; padding: 24px; box-sizing: border-box; }
+    #rotate .icon { font-size: 64px; animation: turn 1.6s ease-in-out infinite; }
+    @keyframes turn { 0%, 30% { transform: rotate(0) } 60%, 100% { transform: rotate(90deg) } }
+    @media (orientation: portrait) { body.phone #rotate { display: flex; } }
+    #full { position: fixed; left: 6px; top: 42%; z-index: 10; display: none; opacity: .85;
+      padding: 5px 12px; border: 0; border-radius: 8px; background: #e21f19; color: #fff; font-size: 12px; font-weight: 700; }
+    body.phone.ready #full { display: block; }
+    #warn { position: fixed; left: 0; right: 0; top: 0; z-index: 30; }
+    #warn div { padding: 10px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="game"><canvas id="unity-canvas" tabindex="-1"></canvas></div>
+  <div id="loading">
+    <h1>МПКА 2</h1>
+    <p>Курчатов vs Москва — загрузка…</p>
+    <div id="bar"><div id="fill"></div></div>
+    <p id="hint" style="font-size:14px;color:#8d7f7b">Первый раз грузится дольше, потом быстрее</p>
+  </div>
+  <div id="rotate">
+    <div class="icon">📱</div>
+    <div style="font-size:22px;font-weight:700">Поверни телефон боком</div>
+    <div style="color:#cfc4c0">Играть удобнее горизонтально</div>
+  </div>
+  <button id="full">На весь экран</button>
+  <div id="warn"></div>
+  <script>
+    var phone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+    if (phone) document.body.classList.add('phone');
+    var canvas = document.querySelector('#unity-canvas');
+    canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
-      function unityShowBanner(msg, type) {
-        var warningBanner = document.querySelector("#unity-warning");
-        function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-        }
-        var div = document.createElement('div');
-        div.innerHTML = msg;
-        warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
-            updateBannerVisibility();
-          }, 5000);
-        }
-        updateBannerVisibility();
+    function showBanner(msg, type) {
+      var w = document.querySelector('#warn'), d = document.createElement('div');
+      d.innerHTML = msg;
+      d.style.background = type == 'error' ? '#b3261e' : '#c9a227';
+      w.appendChild(d);
+      if (type != 'error') setTimeout(function () { w.removeChild(d); }, 5000);
+    }
+
+    var buildUrl = "Build";
+    var config = {
+      arguments: [],
+      dataUrl: buildUrl + "/WebGL.data",
+      frameworkUrl: buildUrl + "/WebGL.framework.js",
+      codeUrl: buildUrl + "/WebGL.wasm",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "DefaultCompany",
+      productName: "KurchatovVsLobnya",
+      productVersion: "0.1.0",
+      showBanner: showBanner,
+    };
+    // на телефоне рисуем не в полном разрешении экрана — так намного быстрее
+    if (phone) config.devicePixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+
+    var instance = null;
+    var script = document.createElement('script');
+    script.src = buildUrl + "/WebGL.loader.js";
+    script.onload = function () {
+      createUnityInstance(canvas, config, function (p) {
+        document.querySelector('#fill').style.width = (100 * p) + '%';
+      }).then(function (u) {
+        instance = u;
+        document.querySelector('#loading').style.display = 'none';
+        document.body.classList.add('ready');
+      }).catch(function (m) { alert(m); });
+    };
+    document.body.appendChild(script);
+
+    document.querySelector('#full').addEventListener('click', function () {
+      var el = document.documentElement;
+      var req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (req) {
+        Promise.resolve(req.call(el)).then(function () {
+          if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {});
+        }).catch(function () {});
       }
-
-      var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/WebGL.loader.js";
-      var config = {
-        arguments: [],
-        dataUrl: buildUrl + "/WebGL.data",
-        frameworkUrl: buildUrl + "/WebGL.framework.js",
-        codeUrl: buildUrl + "/WebGL.wasm",
-        streamingAssetsUrl: "StreamingAssets",
-
-        // If you have a custom web site structure, or want to place multiple Unity build instances on the same page,
-        // you can pass fullscreenElementID: "my-unity-fullscreen-container-id", in this configuration field to
-        // explicitly point to the element tree root that is displayed in fullscreen mode.
-        fullscreenElementID: "unity-fullscreen-container",
-
-        companyName: "DefaultCompany",
-        productName: "KurchatovVsLobnya",
-        productVersion: "0.1.0",
-        showBanner: unityShowBanner,
-        // errorHandler: function(err, url, line) {
-        //    alert("error " + err + " occurred at line " + line);
-        //    // Return 'true' if you handled this error and don't want Unity
-        //    // to process it further, 'false' otherwise.
-        //    return true;
-        // },
-      };
-
-      // By default, Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = false;
-
-      // If you would like all file writes inside Unity Application.persistentDataPath
-      // directory to automatically persist so that the contents are remembered when
-      // the user revisits the site the next time, uncomment the following line:
-      // config.autoSyncPersistentDataPath = true;
-      // This autosyncing is currently not the default behavior to avoid regressing
-      // existing user projects that might rely on the earlier manual
-      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
-      // expected to change.
-
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-        document.querySelector("#unity-container").className = "unity-mobile";
-        canvas.className = "unity-mobile";
-
-        // To lower canvas resolution on mobile devices to gain some
-        // performance, uncomment the following line:
-        // config.devicePixelRatio = 1;
-
-
-      } else {
-        // Desktop style: Render the game canvas container in a window that can be maximized to fullscreen:
-        fullscreenContainer.style.width = "960px";
-        fullscreenContainer.style.height = "600px";
-      }
-
-
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        const loadingContainer = document.querySelector("#unity-loading-container");
-        const progressBarFull = document.querySelector("#unity-progress-bar-full");
-
-        createUnityInstance(canvas, config, (progress) => {
-          if (progress < 1) {
-            loadingContainer.style.display = "block";
-            progressBarFull.style.width = 100 * progress + "%";
-          } else {
-            loadingContainer.style.display = "none";
-          }
-        }).then((unityInstance) => {
-                document.querySelector("#unity-fullscreen-button").onclick = () => {
-                  unityInstance.SetFullscreen(1);
-                };
-
-              }).catch((message) => {
-                alert(message);
-              });
-            };
-
-      document.body.appendChild(script);
-
-    </script>
-  </body>
+      document.querySelector('#full').style.display = 'none';
+    });
+    document.addEventListener('fullscreenchange', function () {
+      document.querySelector('#full').style.display = document.fullscreenElement ? 'none' : '';
+    });
+  </script>
+</body>
 </html>
