@@ -177,7 +177,7 @@ public static class BathBuilder
         tm.anchor = TextAnchor.MiddleCenter;
         tm.alignment = TextAlignment.Center;
         tm.color = color;
-        var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        var font = GameFont.Get();
         if (font != null)
         {
             tm.font = font;

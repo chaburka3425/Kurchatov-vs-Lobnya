@@ -158,7 +158,7 @@ public static partial class HeroBuilder
         tm.alignment = TextAlignment.Center;
         tm.fontStyle = FontStyle.Bold;
         tm.color = color;
-        var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        var font = GameFont.Get();
         if (font != null)
         {
             tm.font = font;

@@ -127,7 +127,7 @@ public static class BuildParts
         var tm = go.AddComponent<TextMesh>();
         tm.text = text; tm.fontSize = 60; tm.characterSize = charSize;
         tm.anchor = TextAnchor.MiddleCenter; tm.alignment = TextAlignment.Center; tm.fontStyle = FontStyle.Bold; tm.color = color;
-        var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        var font = GameFont.Get();
         if (font != null) { tm.font = font; go.GetComponent<MeshRenderer>().sharedMaterial = font.material; }
         return go;
     }

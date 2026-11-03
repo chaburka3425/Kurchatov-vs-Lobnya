@@ -10,7 +10,7 @@ using UnityEngine.AI;
 // Одной кнопкой собирает тестовую сцену: земля, линия, два трона, герой, враги, камера.
 public static class MapBuilder
 {
-    const string ScenePath = "Assets/Scenes/KurchatovVsLobnya.unity";
+    public const string ScenePath ="Assets/Scenes/KurchatovVsLobnya.unity";
     const string NavMeshPath = "Assets/Scenes/KurchatovVsLobnya_NavMesh.asset";
     const string MatFolder = "Assets/Materials";
 
@@ -375,7 +375,7 @@ public static class MapBuilder
         tm.anchor = TextAnchor.MiddleCenter;
         tm.alignment = TextAlignment.Center;
         tm.color = color;
-        var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        var font = GameFont.Get();
         if (font != null)
         {
             tm.font = font;
