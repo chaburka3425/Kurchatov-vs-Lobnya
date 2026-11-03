@@ -1,0 +1,11 @@
+{
+  "name": "МПКА 2 — Курчатов vs Москва",
+  "short_name": "МПКА 2",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#140a0a",
+  "theme_color": "#140a0a",
+  "icons": [{ "src": "TemplateData/icon.png", "sizes": "512x512", "type": "image/png" }]
+}
