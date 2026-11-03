@@ -48,7 +48,7 @@ public class GameManager : MonoBehaviour
         // Кнопка меню/паузы (нужна на телефоне, где нет Esc)
         if (!IsGameOver && !MatchSetup.InLobby)
         {
-            float sc = Screen.height / 1080f;
+            float sc = Mobile.UiScale;
             var pr = new Rect(Screen.width - 90 * sc, 12 * sc, 76 * sc, 56 * sc);
             HudArea.Add(pr);
             var ps = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(26 * sc), fontStyle = FontStyle.Bold };

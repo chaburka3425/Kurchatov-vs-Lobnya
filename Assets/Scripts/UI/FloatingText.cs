@@ -38,7 +38,7 @@ public class FloatingText : MonoBehaviour
         Vector3 sp = cam.WorldToScreenPoint(worldPos + Vector3.up * t * 1.5f);
         if (sp.z < 0f) return;
 
-        float s = Screen.height / 1080f;
+        float s = Mobile.UiScale;
         var style = new GUIStyle(GUI.skin.label)
         {
             fontSize = Mathf.RoundToInt(size * s * (1f + 0.3f * (1f - t))),

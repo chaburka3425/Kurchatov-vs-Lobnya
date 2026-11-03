@@ -476,9 +476,10 @@ public class MatchSetup : MonoBehaviour
         if (!InLobby)
         {
             var kb = Keyboard.current;
+            scoreOpen = MobileHud.ScoreOpen;   // на телефоне — кнопка «СЧЁТ»
             if (kb != null && PlayerHero != null)
             {
-                scoreOpen = kb.backquoteKey.isPressed;   // Ё: таблица видна, пока клавиша зажата
+                scoreOpen |= kb.backquoteKey.isPressed;   // Ё: таблица видна, пока клавиша зажата
                 if (kb.escapeKey.wasPressedThisFrame) { inspect = null; scoreOpen = false; }
             }
             return;
@@ -669,7 +670,7 @@ public class MatchSetup : MonoBehaviour
 
     void Styles()
     {
-        s = Screen.height / 1080f;
+        s = Mobile.UiScale;
         big = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(56 * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         big.normal.textColor = new Color(1f, 0.8f, 0.25f);
         title = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(30 * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
@@ -770,6 +771,8 @@ public class MatchSetup : MonoBehaviour
     void DrawPick(Rect body, Rect foot)
     {
         float colW = (body.width * 0.55f - 3 * 14 * s) / 4f;
+        int perCol = 1; foreach (var a in AttributeUtil.All) { int n = 0; foreach (var h in HeroCatalog.All) if (h.attribute == a) n++; perCol = Mathf.Max(perCol, n); }
+        float cardH = Mathf.Min((colW - 20 * s) * 0.8f, (body.height - 46 * s) / perCol - 18 * s);   // все герои влезают по высоте (телефон)
         for (int k = 0; k < 4; k++)
         {
             var attr = AttributeUtil.All[k];
@@ -784,7 +787,8 @@ public class MatchSetup : MonoBehaviour
             {
                 if (h.attribute != attr) continue;
                 any = true;
-                var card = new Rect(col.x + 10 * s, y, col.width - 20 * s, (col.width - 20 * s) * 0.8f);
+                float cw = Mathf.Min(col.width - 20 * s, cardH / 0.8f);
+                var card = new Rect(col.x + (col.width - cw) / 2f, y, cw, cardH);
                 bool taken = false, sel = h == pick;
                 Box(new Rect(card.x - 3 * s, card.y - 3 * s, card.width + 6 * s, card.height + 6 * s), sel ? new Color(1f, 0.8f, 0.25f) : new Color(0.25f, 0.2f, 0.2f));
                 DrawPortrait(card, h);

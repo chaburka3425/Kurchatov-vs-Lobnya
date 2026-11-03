@@ -16,6 +16,7 @@ public static class WebGLBuilder
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
         PlayerSettings.WebGL.decompressionFallback = false;
         PlayerSettings.WebGL.dataCaching = true;
+        PlayerSettings.WebGL.template = "PROJECT:Mpka";   // своя страница: на весь экран, удобно на телефоне
         // без этого линковщик не находит _embind_* (bindings.cpp из рантайма)
         PlayerSettings.WebGL.emscriptenArgs = "-lembind";
         // недостающие _emval_* для libAppUITextMateLib.a — заглушки в Assets/Plugins/WebGL/EmvalStubs.jslib

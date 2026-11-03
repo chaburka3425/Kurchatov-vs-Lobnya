@@ -46,7 +46,7 @@ public class AbilityBarGUI : MonoBehaviour
     {
         GUI.depth = -10; // панель героя поверх полосок здоровья
         if (caster.Abilities == null) return;
-        s = Screen.height / 1080f;
+        s = Mobile.UiScale;
 
         float h = 236 * s;
         float portraitW = 330 * s;

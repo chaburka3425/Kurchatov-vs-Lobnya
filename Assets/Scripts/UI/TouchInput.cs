@@ -70,7 +70,7 @@ public class TouchInput : MonoBehaviour
             {
                 float threshold = Mathf.Max(18f, Screen.height * 0.025f);
                 if (!startedOverHud && (p - startPos).magnitude > threshold) dragging = true;
-                if (dragging && !startedOverHud && rig != null) rig.PanScreen(p - lastPos);
+                if (dragging && !startedOverHud && rig != null) { rig.PanScreen(p - lastPos); Mobile.Follow = false; }
                 lastPos = p;
             }
             return;

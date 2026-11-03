@@ -28,14 +28,14 @@ public class MinimapGUI : MonoBehaviour
 
     public static bool IsOverMap(Vector2 screenPos)
     {
-        float s = Screen.height / 1080f, size = SizeFor(s);
+        float s = Mobile.UiScale, size = SizeFor(s);
         var r = new Rect(10 * s, Screen.height - size - 10 * s, size, size);
         return r.Contains(new Vector2(screenPos.x, Screen.height - screenPos.y));
     }
 
     Rect MapRect()
     {
-        float s = Screen.height / 1080f;
+        float s = Mobile.UiScale;
         float size = SizeFor(s);
         return new Rect(10 * s, Screen.height - size - 10 * s, size, size);
     }
@@ -66,7 +66,7 @@ public class MinimapGUI : MonoBehaviour
                 var fxt = HeroController.Player != null ? HeroController.Player.GetComponent<ItemEffects>() : null;
                 if (fxt != null && fxt.TpTargeting) { fxt.TicketAtWorld(w); return; }
                 if (Time.unscaledTime - lastTouchTap < 0.35f && hero != null) hero.MoveTo(w);
-                else if (rig != null) rig.JumpTo(w);
+                else if (rig != null) { rig.JumpTo(w); Mobile.Follow = false; }
                 lastTouchTap = Time.unscaledTime;
             }
         }
@@ -92,7 +92,7 @@ public class MinimapGUI : MonoBehaviour
     {
         GUI.depth = -10;
         if (background == null) return;
-        float s = Screen.height / 1080f;
+        float s = Mobile.UiScale;
         var r = MapRect();
         HudArea.Add(r);
 

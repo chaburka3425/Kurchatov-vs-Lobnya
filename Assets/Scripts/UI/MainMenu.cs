@@ -59,7 +59,7 @@ public class MainMenu : MonoBehaviour
     void OnGUI()
     {
         if (label == null) InitStyles();
-        s = Screen.height / 1080f;
+        s = Mobile.MenuScale;
         ApplyFontSizes();
 
         GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), bg, ScaleMode.StretchToFill);
@@ -86,6 +86,18 @@ public class MainMenu : MonoBehaviour
     string joinCode = "", joinIp = "127.0.0.1";
     bool showIp;
 
+    // Поле ввода: на телефоне — тап открывает окно ввода браузера (у IMGUI нет экранной клавиатуры)
+    static string Field(Rect r, string value, int max, GUIStyle st, string title)
+    {
+        if (!Mobile.IsPhone) return GUI.TextField(r, value, max, st);
+        if (GUI.Button(r, value, st))
+        {
+            var v = Mobile.Prompt(title, value) ?? value;
+            value = v.Length > max ? v.Substring(0, max) : v;
+        }
+        return value;
+    }
+
     void DrawFriends(Rect c)
     {
         GUI.color = new Color(0, 0, 0, 0.75f);
@@ -106,12 +118,12 @@ public class MainMenu : MonoBehaviour
         {
             if (GUI.Button(new Rect(r.xMax - 70 * s, r.y + 10 * s, 56 * s, 44 * s), "X", smallBtn)) friends = false;
             GUI.Label(new Rect(x, y, 200 * s, 50 * s), "Твой ник:", bold);
-            Net.MyNick = GUI.TextField(new Rect(x + 200 * s, y, 360 * s, 50 * s), Net.MyNick, 16, field);
+            Net.MyNick = Field(new Rect(x + 200 * s, y, 360 * s, 50 * s), Net.MyNick, 16, field, "Твой ник");
             y += 80 * s;
             GUI.enabled = !Net.Busy;
             if (GUI.Button(new Rect(x, y, iw * 0.48f, 100 * s), "СОЗДАТЬ ИГРУ", playStyle)) Net.HostRelay(Team.Kurchatov);
             GUI.Label(new Rect(x + iw * 0.52f, y, iw * 0.48f, 40 * s), "Код от друга:", bold);
-            joinCode = GUI.TextField(new Rect(x + iw * 0.52f, y + 44 * s, iw * 0.25f, 56 * s), joinCode, 8, field).ToUpperInvariant();
+            joinCode = Field(new Rect(x + iw * 0.52f, y + 44 * s, iw * 0.25f, 56 * s), joinCode, 8, field, "Код от друга").ToUpperInvariant();
             if (GUI.Button(new Rect(x + iw * 0.78f, y + 44 * s, iw * 0.22f, 56 * s), "ВОЙТИ", smallBtn) && joinCode.Length > 0) Net.JoinRelay(joinCode);
             y += 130 * s;
             GUI.Label(new Rect(x, y, iw, 90 * s), "Создай игру и скинь другу код. Он вводит код и жмёт «ВОЙТИ». Пустые места займут боты.", label);
@@ -121,7 +133,7 @@ public class MainMenu : MonoBehaviour
             {
                 y += 56 * s;
                 if (GUI.Button(new Rect(x, y, 300 * s, 50 * s), "Создать по IP", smallBtn)) Net.HostDirect(Team.Kurchatov);
-                joinIp = GUI.TextField(new Rect(x + 320 * s, y, 300 * s, 50 * s), joinIp, 40, field);
+                joinIp = Field(new Rect(x + 320 * s, y, 300 * s, 50 * s), joinIp, 40, field, "IP хоста");
                 if (GUI.Button(new Rect(x + 640 * s, y, 240 * s, 50 * s), "Войти по IP", smallBtn)) Net.JoinDirect(joinIp.Trim());
             }
             GUI.enabled = true;
@@ -132,9 +144,9 @@ public class MainMenu : MonoBehaviour
         // Мы в комнате
         GUI.Label(new Rect(x, y, iw, 40 * s), Net.IsHost ? "Скинь друзьям этот код:" : "Код комнаты:", bold);
         GUI.Label(new Rect(x, y + 36 * s, iw * 0.6f, 90 * s), Net.Code, big);
-        if (Net.Code.Length > 0 && GUI.Button(new Rect(x + iw * 0.62f, y + 30 * s, 300 * s, 50 * s), "Копировать код", smallBtn)) GUIUtility.systemCopyBuffer = Net.Code;
+        if (Net.Code.Length > 0 && GUI.Button(new Rect(x + iw * 0.62f, y + 30 * s, 300 * s, 50 * s), "Копировать код", smallBtn)) Mobile.Copy(Net.Code);
         string link = Net.InviteLink;
-        if (link.Length > 0 && GUI.Button(new Rect(x + iw * 0.62f, y + 86 * s, 300 * s, 50 * s), "Копировать ссылку", smallBtn)) GUIUtility.systemCopyBuffer = link;
+        if (link.Length > 0 && GUI.Button(new Rect(x + iw * 0.62f, y + 86 * s, 300 * s, 50 * s), Mobile.IsPhone ? "Поделиться ссылкой" : "Копировать ссылку", smallBtn)) Mobile.Copy(link, Mobile.IsPhone);
         y += 140 * s;
 
         float colW = (iw - 30 * s) / 2f;

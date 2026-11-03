@@ -114,7 +114,7 @@ public class ShopGUI : MonoBehaviour
     {
         GUI.depth = -20; // магазин поверх всего, кроме паузы
         if (wallet == null) return;
-        s = Screen.height / 1080f;
+        s = Mobile.UiScale;
 
         // Кнопка «МАГАЗИН» над золотом
         var btn = new Rect(Screen.width - 240 * s, Screen.height - 150 * s, 220 * s, 46 * s);

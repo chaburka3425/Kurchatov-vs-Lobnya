@@ -319,7 +319,7 @@ public class Courier : MonoBehaviour
     {
         if (MatchSetup.InLobby || owner == null || !owner.playerControlled) return;
         GUI.depth = -10;
-        float s = Screen.height / 1080f, size = MinimapGUI.SizeFor(s);
+        float s = Mobile.UiScale, size = MinimapGUI.SizeFor(s);
         var map = new Rect(10 * s, Screen.height - size - 10 * s, size, size);
         var b = new Rect(map.xMax + 14 * s, map.yMax - 92 * s - 110 * s, 92 * s, 92 * s);
         HudArea.Add(new Rect(b.x, b.y, b.width, b.height + 18 * s));
